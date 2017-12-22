@@ -102,14 +102,14 @@ def getSysfsValue(device, key):
     if pathDict['prefix'] == hwmonprefix:
         """ HW Monitor values have a different path structure """
         if not getHwmonFromDevice(device):
-            return None
+            return ''
         filePath = os.path.join(getHwmonFromDevice(device), pathDict['filepath'])
     if pathDict['prefix'] == powerprefix:
         """ Power consumption is in debugfs and has a different path structure """
         filePath = findFile(powerprefix, 'amdgpu_pm_info', device)
 
     if not os.path.isfile(filePath):
-        return None
+        return ''
 
     with open(filePath, 'r') as fileContents:
         fileValue = fileContents.read().rstrip('\n')
@@ -119,7 +119,7 @@ def getSysfsValue(device, key):
         fileValue = parseSysfsValue(key, fileValue)
 
     if fileValue == '':
-        printLog(device, 'Unable to get SysFS value: ', key)
+        printLog(device, 'Unable to get SysFS value: ' + key)
         RETCODE = 1
 
     return fileValue
@@ -357,6 +357,8 @@ def getFanSpeed(device):
 
     fanLevel = int(getSysfsValue(device, 'fan'))
     fanMax = int(getSysfsValue(device, 'fanmax'))
+    if not fanLevel or not fanMax:
+        return 0
     return round((fanLevel / fanMax) * 100, 2)
 
 
@@ -406,6 +408,8 @@ def getMaxLevel(device, type):
         key = 'mclk'
 
     levels = getSysfsValue(device, key).splitlines()
+    if not levels:
+        return 0
     return int(levels[-1][0])
 
 
@@ -561,7 +565,7 @@ def showCurrentFans(deviceList):
     for device in deviceList:
         fanlevel = getSysfsValue(device, 'fan')
         fanspeed = getFanSpeed(device)
-        if not fanspeed:
+        if not fanspeed or not fanlevel:
             printLog(device, 'Unable to determine current fan speed')
             continue
         printLog(device, 'Fan Level: ' + str(fanlevel) + ' (' + str(fanspeed) + ')%')
@@ -732,6 +736,8 @@ def showAllConcise(deviceList):
             fan = fan + '%'
 
         perf = getSysfsValue(device, 'perf')
+        if not perf:
+            perf = 'N/A'
 
         od = getSysfsValue(device, 'sclk_od')
         if od == '-1':
@@ -871,6 +877,10 @@ def setFanSpeed(deviceList, fan):
             continue
         fanpath = os.path.join(hwmon, 'pwm1')
         maxfan = getSysfsValue(device, 'fanmax')
+        if not maxfan:
+            printLog(device, 'Cannot get max fan speed')
+            RETCODE = 1
+            continue
         if int(fan) > int(maxfan):
             printLog(device, 'Unable to set fan speed to ' + fan + ' : Max Level = ' + maxfan)
             RETCODE = 1
